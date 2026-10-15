@@ -39,6 +39,21 @@
                 "footer": {
                     "text": "{% if firstFailed == false %}Succeeded{% else %}Failed on task `{{firstFailed.taskId}}`{% endif %} after {{duration}}"
                 }
+                {% set hasMessage = customMessage is defined and customMessage is not empty %}
+                {% set hasFields = customFields is defined and customFields is not empty %}
+                {% if hasMessage or hasFields %}
+                , "fields": [
+                    {% if hasMessage %}{
+                        "name": "Message",
+                        "value": {{ customMessage | abbreviate(1024) | toJson }}
+                    }{% if hasFields %}, {% endif %}{% endif %}
+                    {% if hasFields %}{% for entry in customFields %}{
+                        "name": {{ entry.key | abbreviate(256) | toJson }},
+                        "value": {{ (((entry.value is map or entry.value is iterable) ? (entry.value | toJson) : (entry.value | string | default("-"))) | abbreviate(1024)) | toJson }},
+                        "inline": true
+                    }{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
+                ]
+                {% endif %}
           }
         ]
 }
