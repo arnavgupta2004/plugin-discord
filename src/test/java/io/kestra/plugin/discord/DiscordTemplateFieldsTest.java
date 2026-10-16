@@ -2,6 +2,7 @@ package io.kestra.plugin.discord;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -49,6 +50,46 @@ class DiscordTemplateFieldsTest {
         assertThat(((String) fields.get(0).get("value")).length(), lessThanOrEqualTo(1024));
         assertThat(((String) fields.get(1).get("name")).length(), lessThanOrEqualTo(256));
         assertThat(((String) fields.get(1).get("value")).length(), lessThanOrEqualTo(1024));
+    }
+
+    @Test
+    void moreThan25Fields_lastFieldSaysHowManyWereOmitted() throws Exception {
+        var embed = renderDefaultEmbed(Map.of(
+            "customMessage", "Disk is full",
+            "customFields", customFields(30, 3, 5)
+        ));
+
+        var fields = fields(embed);
+        assertThat(fields.size(), is(25));
+        assertThat(fields.getFirst().get("name"), is("Message"));
+        assertThat(fields.get(1).get("name"), is("k01"));
+        assertThat(fields.get(23).get("name"), is("k23"));
+        assertThat(fields.getLast(), is(Map.of("name", "More fields", "value", "…and 7 more fields omitted")));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void manyLongFields_stayWithinDiscordMessageSizeLimit() throws Exception {
+        var embed = renderDefaultEmbed(Map.of(
+            "customMessage", "m".repeat(2000),
+            "customFields", customFields(30, 300, 2000)
+        ));
+
+        // Discord counts title, description, field names and values, footer and author name: at most 6000 per message
+        int size = ((String) embed.get("description")).length()
+            + ((String) ((Map<String, Object>) embed.get("footer")).get("text")).length()
+            + fields(embed).stream().mapToInt(f -> ((String) f.get("name")).length() + ((String) f.get("value")).length()).sum();
+        assertThat(size, lessThanOrEqualTo(6000));
+    }
+
+    // k01, k02, ... in insertion order, like a map parsed from a flow
+    private static Map<String, Object> customFields(int count, int nameLength, int valueLength) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        for (int i = 1; i <= count; i++) {
+            var key = String.format("k%02d", i);
+            fields.put(key + "n".repeat(Math.max(0, nameLength - key.length())), "v".repeat(valueLength));
+        }
+        return fields;
     }
 
     @SuppressWarnings("unchecked")
